@@ -170,3 +170,6 @@ Thank you for taking the time in checking this project out. I hope it helps you 
 - [x] Detailed installation and usage instructions
 - [x] Show short video example for monocular mode
 - [x] Update bibtex to use my IEEE AIM 2024 paper from google scholar
+
+
+docker build --platform=linux/amd64 --memory=12g --memory-swap=8g -t ros2_orb_slam3:latest .
