@@ -82,6 +82,10 @@ MonocularMode::MonocularMode() :Node("mono_node_cpp")
     //* subscribe to receive the timestep
     subTimestepMsg_subscription_= this->create_subscription<std_msgs::msg::Float64>(subTimestepMsgName, 1, std::bind(&MonocularMode::Timestep_callback, this, _1));
 
+    pointCloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/orbslam3/map_points", rclcpp::QoS(10));
+    image_pub_ = this->create_publisher<sensor_msgs::msg::Image>("/orbslam3/processed_image", rclcpp::QoS(10));
+    pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/orbslam3/camera_pose", rclcpp::QoS(10));
+
     
     RCLCPP_INFO(this->get_logger(), "Waiting to finish handshake ......");
     
@@ -141,11 +145,12 @@ void MonocularMode::initializeVSLAM(std::string& configString){
     // NOTE if you plan on passing other configuration parameters to ORB SLAM3 Systems class, do it here
     // NOTE you may also use a .yaml file here to set these values
     sensorType = ORB_SLAM3::System::MONOCULAR; 
-    enablePangolinWindow = true; // Shows Pangolin window output
-    enableOpenCVWindow = true; // Shows OpenCV window output
+    enablePangolinWindow = false; // Shows Pangolin window output
+    enableOpenCVWindow = false; // Shows OpenCV window output
     
     pAgent = new ORB_SLAM3::System(vocFilePath, settingsFilePath, sensorType, enablePangolinWindow);
     std::cout << "MonocularMode node initialized" << std::endl; // TODO needs a better message
+    isInit_ = true;
 }
 
 //* Callback that processes timestep sent over ROS
@@ -157,6 +162,7 @@ void MonocularMode::Timestep_callback(const std_msgs::msg::Float64& time_msg){
 //* Callback to process image message and run SLAM node
 void MonocularMode::Img_callback(const sensor_msgs::msg::Image& msg)
 {
+    if(!isInit_) return;
     // Initialize
     cv_bridge::CvImagePtr cv_ptr; //* Does not create a copy, memory efficient
     
@@ -185,7 +191,72 @@ void MonocularMode::Img_callback(const sensor_msgs::msg::Image& msg)
     
     //* An example of what can be done after the pose w.r.t camera coordinate frame is computed by ORB SLAM3
     //Sophus::SE3f Twc = Tcw.inverse(); //* Pose with respect to global image coordinate, reserved for future use
+    std::vector<ORB_SLAM3::MapPoint*> mpts = pAgent->GetAllMapPoints();
 
+    sensor_msgs::msg::PointCloud2 cloud_msg;
+    cloud_msg.header.frame_id = "map";
+    cloud_msg.header.stamp = this->get_clock()->now();
+    cloud_msg.height = 1;
+    cloud_msg.width = mpts.size();
+    cloud_msg.is_dense = false;
+    cloud_msg.is_bigendian = false;
+
+    sensor_msgs::PointCloud2Modifier modifier(cloud_msg);
+    modifier.setPointCloud2FieldsByString(1, "xyz");
+    modifier.resize(mpts.size());
+
+    sensor_msgs::PointCloud2Iterator<float> iter_x(cloud_msg, "x");
+    sensor_msgs::PointCloud2Iterator<float> iter_y(cloud_msg, "y");
+    sensor_msgs::PointCloud2Iterator<float> iter_z(cloud_msg, "z");
+
+    for (auto pMP : mpts) {
+        if (!pMP || pMP->isBad()) continue;
+        Eigen::Vector3f pos = pMP->GetWorldPos();
+
+        *iter_x = pos.x();
+        *iter_y = pos.y();
+        *iter_z = pos.z();
+
+        ++iter_x; ++iter_y; ++iter_z;
+    }
+
+    pointCloud_pub_->publish(cloud_msg);
+
+    std::vector<cv::KeyPoint> tracked_kps = pAgent->GetTrackedKeyPointsUn();
+
+    // === 2. Draw keypoints on image ===
+    cv::Mat img_with_kps;
+    cv::drawKeypoints(cv_ptr->image, tracked_kps, img_with_kps, cv::Scalar(0, 255, 0), cv::DrawMatchesFlags::DEFAULT);
+
+    // === 3. Publish processed image ===
+    sensor_msgs::msg::Image::SharedPtr ros_img_msg = cv_bridge::CvImage(
+        std_msgs::msg::Header(),  // header
+        "bgr8",                   // encoding
+        img_with_kps              // image with keypoints
+    ).toImageMsg();
+
+    ros_img_msg->header.stamp = this->get_clock()->now();
+    ros_img_msg->header.frame_id = "camera";
+
+    image_pub_->publish(*ros_img_msg);
+
+    // 1. 取得 Tcw
+    Sophus::SE3f Twc = Tcw.inverse();  // Transform from Camera to World
+    Eigen::Vector3f trans = Twc.translation();
+    Eigen::Quaternionf quat(Twc.unit_quaternion());
+    geometry_msgs::msg::PoseStamped pose_msg;
+    pose_msg.header.stamp = this->get_clock()->now();
+    pose_msg.header.frame_id = "map";
+    pose_msg.pose.position.x = trans.x();
+    pose_msg.pose.position.y = trans.y();
+    pose_msg.pose.position.z = trans.z();
+    pose_msg.pose.orientation.x = quat.x();
+    pose_msg.pose.orientation.y = quat.y();
+    pose_msg.pose.orientation.z = quat.z();
+    pose_msg.pose.orientation.w = quat.w();
+    
+    pose_pub_->publish(pose_msg);
 }
+
 
 

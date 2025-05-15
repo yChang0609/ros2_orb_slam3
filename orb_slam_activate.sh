@@ -22,7 +22,8 @@ echo "Running ros2_orb_slam3 container on x86_64 (CPU-only)..."
 docker run -it  \
     --platform=linux/amd64 \
     --network compose_my_bridge_network \
+    --env-file .env \
+    -v "$WORKSPACE_DIR:/root/ros2_ws/src" \
     $PORT_MAPPING \
     $IMAGE_NAME 
-    # -v "$WORKSPACE_DIR:/root/ros2_ws/src" \
     # /bin/bash

@@ -26,6 +26,9 @@
 #include <std_msgs/msg/string.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include "sensor_msgs/msg/image.hpp"
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/point_cloud2_iterator.hpp>
+#include "geometry_msgs/msg/pose_stamped.hpp"
 using std::placeholders::_1; //* TODO why this is suggested in official tutorial
 
 // Include Eigen
@@ -69,7 +72,7 @@ class MonocularMode : public rclcpp::Node
         
         // Class internal variables
         std::string homeDir = "";
-        std::string packagePath = "ros2_test/src/ros2_orb_slam3/"; //! Change to match path to your workspace
+        std::string packagePath = "ros2_ws/src/ros2_orb_slam3/"; //! Change to match path to your workspace
         std::string OPENCV_WINDOW = ""; // Set during initialization
         std::string nodeName = ""; // Name of this node
         std::string vocFilePath = ""; // Path to ORB vocabulary provided by DBoW2 package
@@ -86,13 +89,16 @@ class MonocularMode : public rclcpp::Node
         rclcpp::Publisher<std_msgs::msg::String>::SharedPtr configAck_publisher_;
         rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subImgMsg_subscription_;
         rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr subTimestepMsg_subscription_;
+        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointCloud_pub_;
+        rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
+        rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
 
         //* ORB_SLAM3 related variables
         ORB_SLAM3::System* pAgent; // pointer to a ORB SLAM3 object
         ORB_SLAM3::System::eSensor sensorType;
         bool enablePangolinWindow = false; // Shows Pangolin window output
         bool enableOpenCVWindow = false; // Shows OpenCV window output
-
+        bool isInit_ = false;
         //* ROS callbacks
         void experimentSetting_callback(const std_msgs::msg::String& msg); // Callback to process settings sent over by Python node
         void Timestep_callback(const std_msgs::msg::Float64& time_msg); // Callback to process the timestep for this image

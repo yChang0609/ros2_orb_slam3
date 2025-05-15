@@ -2,23 +2,23 @@
 
 # Camera configuration
 Camera.type: "PinHole"
-Camera.name: "Test Camera"
+Camera.name: "narrow_stereo"
 Camera.setup: "monocular"
 Camera.fps: 30.0
-Camera.width: 600
-Camera.height: 600
-Camera.fx: 500.0
-Camera.fy: 500.0
-Camera.cx: 300.0
-Camera.cy: 300.0
+Camera.width: 640
+Camera.height: 360
+Camera.fx: 333.26084
+Camera.fy: 330.25227
+Camera.cx: 315.3434
+Camera.cy: 172.41486
 
-Camera.k1: 0.0
-Camera.k2: 0.0
-Camera.p1: 0.0
-Camera.p2: 0.0
-Camera.k3: 0.0  # 可選，如果無就設為 0.0
+Camera.k1: 0.028031
+Camera.k2: -0.003357
+Camera.p1: 0.012149
+Camera.p2: -0.028142
+Camera.k3: 0.0  # distortion_coefficients[4]
 
-Camera.RGB: 1  # 注意這裡是數值，不是 true
+Camera.RGB: 1  # 表示影像格式為 RGB
 
 # ORB Extractor Parameters
 ORBextractor.nFeatures: 1000
