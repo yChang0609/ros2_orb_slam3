@@ -3,7 +3,7 @@
 # Camera configuration
 Camera.type: "PinHole"
 Camera.name: "narrow_stereo"
-Camera.setup: "monocular"
+Camera.setup: "rgbd"
 Camera.fps: 30.0
 Camera.width: 640
 Camera.height: 360
@@ -16,9 +16,17 @@ Camera.k1: 0.028031
 Camera.k2: -0.003357
 Camera.p1: 0.012149
 Camera.p2: -0.028142
-Camera.k3: 0.0  # distortion_coefficients[4]
+Camera.k3: 0.0
 
-Camera.RGB: 1  # 表示影像格式為 RGB
+Camera.RGB: 1
+Camera.bf: 40.0
+
+# Depth threshold (in meters)
+ThDepth: 1000.0
+
+# Depth map factor (depends on your depth image encoding)
+# Example: 1000.0 for depth in mm, 1.0 for meters
+DepthMapFactor: 100.0
 
 # ORB Extractor Parameters
 ORBextractor.nFeatures: 1000
@@ -29,12 +37,12 @@ ORBextractor.minThFAST: 7
 
 # Viewer Parameters
 Viewer.KeyFrameSize: 0.05
-Viewer.KeyFrameLineWidth: 1
+Viewer.KeyFrameLineWidth: 1.0
 Viewer.GraphLineWidth: 0.9
-Viewer.PointSize: 2
+Viewer.PointSize: 2.0
 Viewer.CameraSize: 0.08
-Viewer.CameraLineWidth: 3
-Viewer.ViewpointX: 0
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
 Viewer.ViewpointY: -0.7
 Viewer.ViewpointZ: -1.8
-Viewer.ViewpointF: 500
+Viewer.ViewpointF: 500.0

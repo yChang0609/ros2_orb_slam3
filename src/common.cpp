@@ -67,7 +67,7 @@ MonocularMode::MonocularMode() :Node("mono_node_cpp")
     
     subexperimentconfigName = "/mono_py_driver/experiment_settings"; // topic that sends out some configuration parameters to the cpp ndoe
     pubconfigackName = "/mono_py_driver/exp_settings_ack"; // send an acknowledgement to the python node
-    subImgMsgName = "/mono_py_driver/img_msg"; // topic to receive RGB image messages
+    // subImgMsgName = "/mono_py_driver/img_msg"; // topic to receive RGB image messages
     subTimestepMsgName = "/mono_py_driver/timestep_msg"; // topic to receive RGB image messages
 
     //* subscribe to python node to receive settings
@@ -77,7 +77,7 @@ MonocularMode::MonocularMode() :Node("mono_node_cpp")
     configAck_publisher_ = this->create_publisher<std_msgs::msg::String>(pubconfigackName, 10);
 
     //* subscrbite to the image messages coming from the Python driver node
-    subImgMsg_subscription_= this->create_subscription<sensor_msgs::msg::Image>(subImgMsgName, 1, std::bind(&MonocularMode::Img_callback, this, _1));
+    // subImgMsg_subscription_= this->create_subscription<sensor_msgs::msg::Image>(subImgMsgName, 1, std::bind(&MonocularMode::Img_callback, this, _1));
 
     //* subscribe to receive the timestep
     subTimestepMsg_subscription_= this->create_subscription<std_msgs::msg::Float64>(subTimestepMsgName, 1, std::bind(&MonocularMode::Timestep_callback, this, _1));
@@ -85,7 +85,12 @@ MonocularMode::MonocularMode() :Node("mono_node_cpp")
     pointCloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/orbslam3/map_points", rclcpp::QoS(10));
     image_pub_ = this->create_publisher<sensor_msgs::msg::Image>("/orbslam3/processed_image", rclcpp::QoS(10));
     pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/orbslam3/camera_pose", rclcpp::QoS(10));
+    
+    rgb_sub_.reset(new message_filters::Subscriber<sensor_msgs::msg::Image>(this, "/mono_py_driver/rgb_image"));
+    depth_sub_.reset(new message_filters::Subscriber<sensor_msgs::msg::Image>(this, "/mono_py_driver/depth_image"));
 
+    sync_.reset(new message_filters::Synchronizer<SyncPolicy>(SyncPolicy(10), *rgb_sub_, *depth_sub_));
+    sync_->registerCallback(std::bind(&MonocularMode::RGBD_callback, this, std::placeholders::_1, std::placeholders::_2));
     
     RCLCPP_INFO(this->get_logger(), "Waiting to finish handshake ......");
     
@@ -144,7 +149,7 @@ void MonocularMode::initializeVSLAM(std::string& configString){
     
     // NOTE if you plan on passing other configuration parameters to ORB SLAM3 Systems class, do it here
     // NOTE you may also use a .yaml file here to set these values
-    sensorType = ORB_SLAM3::System::MONOCULAR; 
+    sensorType = ORB_SLAM3::System::RGBD;// ORB_SLAM3::System::MONOCULAR; 
     enablePangolinWindow = false; // Shows Pangolin window output
     enableOpenCVWindow = false; // Shows OpenCV window output
     
@@ -160,26 +165,17 @@ void MonocularMode::Timestep_callback(const std_msgs::msg::Float64& time_msg){
 }
 
 //* Callback to process image message and run SLAM node
-void MonocularMode::Img_callback(const sensor_msgs::msg::Image& msg)
+void MonocularMode::RGBD_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_msg,
+                                  const sensor_msgs::msg::Image::ConstSharedPtr& depth_msg)
 {
     if(!isInit_) return;
     // Initialize
-    cv_bridge::CvImagePtr cv_ptr; //* Does not create a copy, memory efficient
-    
-    //* Convert ROS image to openCV image
-    try
-    {
-        //cv::Mat im =  cv_bridge::toCvShare(msg.img, msg)->image;
-        cv_ptr = cv_bridge::toCvCopy(msg); // Local scope
-        
-        // DEBUGGING, Show image
-        // Update GUI Window
-        // cv::imshow("test_window", cv_ptr->image);
-        // cv::waitKey(3);
-    }
-    catch (cv_bridge::Exception& e)
-    {
-        RCLCPP_ERROR(this->get_logger(),"Error reading image");
+    cv_bridge::CvImagePtr cv_ptr_rgb, cv_ptr_depth;
+    try {
+        cv_ptr_rgb = cv_bridge::toCvCopy(rgb_msg, "bgr8");
+        cv_ptr_depth = cv_bridge::toCvCopy(depth_msg, "16UC1");  // 一般 depth 為 16UC1
+    } catch (cv_bridge::Exception& e) {
+        RCLCPP_ERROR(this->get_logger(),"Error reading images: %s", e.what());
         return;
     }
     
@@ -187,7 +183,7 @@ void MonocularMode::Img_callback(const sensor_msgs::msg::Image& msg)
     
     //* Perform all ORB-SLAM3 operations in Monocular mode
     //! Pose with respect to the camera coordinate frame not the world coordinate frame
-    Sophus::SE3f Tcw = pAgent->TrackMonocular(cv_ptr->image, timeStep); 
+    Sophus::SE3f Tcw = pAgent->TrackRGBD(cv_ptr_rgb->image, cv_ptr_depth->image, timeStep);
     
     //* An example of what can be done after the pose w.r.t camera coordinate frame is computed by ORB SLAM3
     //Sophus::SE3f Twc = Tcw.inverse(); //* Pose with respect to global image coordinate, reserved for future use
@@ -226,7 +222,7 @@ void MonocularMode::Img_callback(const sensor_msgs::msg::Image& msg)
 
     // === 2. Draw keypoints on image ===
     cv::Mat img_with_kps;
-    cv::drawKeypoints(cv_ptr->image, tracked_kps, img_with_kps, cv::Scalar(0, 255, 0), cv::DrawMatchesFlags::DEFAULT);
+    cv::drawKeypoints(cv_ptr_rgb->image, tracked_kps, img_with_kps, cv::Scalar(0, 255, 0), cv::DrawMatchesFlags::DEFAULT);
 
     // === 3. Publish processed image ===
     sensor_msgs::msg::Image::SharedPtr ros_img_msg = cv_bridge::CvImage(

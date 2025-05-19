@@ -19,6 +19,9 @@
 //* ROS2 includes
 //* std_msgs in ROS 2 https://docs.ros2.org/foxy/api/std_msgs/index-msg.html
 #include "rclcpp/rclcpp.hpp"
+#include <message_filters/subscriber.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
 
 // #include "your_custom_msg_interface/msg/custom_msg_field.hpp" // Example of adding in a custom message
 #include <std_msgs/msg/header.hpp>
@@ -87,11 +90,16 @@ class MonocularMode : public rclcpp::Node
         //* Definitions of publisher and subscribers
         rclcpp::Subscription<std_msgs::msg::String>::SharedPtr expConfig_subscription_;
         rclcpp::Publisher<std_msgs::msg::String>::SharedPtr configAck_publisher_;
-        rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subImgMsg_subscription_;
+        // rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subImgMsg_subscription_;
         rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr subTimestepMsg_subscription_;
         rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointCloud_pub_;
         rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
         rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
+
+        std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::Image>> rgb_sub_;
+        std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::Image>> depth_sub_;
+        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, sensor_msgs::msg::Image> SyncPolicy;
+        std::shared_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
 
         //* ORB_SLAM3 related variables
         ORB_SLAM3::System* pAgent; // pointer to a ORB SLAM3 object
@@ -102,7 +110,8 @@ class MonocularMode : public rclcpp::Node
         //* ROS callbacks
         void experimentSetting_callback(const std_msgs::msg::String& msg); // Callback to process settings sent over by Python node
         void Timestep_callback(const std_msgs::msg::Float64& time_msg); // Callback to process the timestep for this image
-        void Img_callback(const sensor_msgs::msg::Image& msg); // Callback to process RGB image and semantic matrix sent by Python node
+        void RGBD_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_msg,
+                                  const sensor_msgs::msg::Image::ConstSharedPtr& depth_msg); // Callback to process RGB image and semantic matrix sent by Python node
         
         //* Helper functions
         // ORB_SLAM3::eigenMatXf convertToEigenMat(const std_msgs::msg::Float32MultiArray& msg); // Helper method, converts semantic matrix eigenMatXf, a Eigen 4x4 float matrix
